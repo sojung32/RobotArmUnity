@@ -11,7 +11,7 @@ public class Target2 : MonoBehaviour
         {
             robotArm.AddReward(1.0f);
             robotArm.MakeRandomTarget();
-	    robotArm.Done();
+	        robotArm.Done();
         }
     }
 }
