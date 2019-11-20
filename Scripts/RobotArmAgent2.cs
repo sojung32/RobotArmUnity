@@ -1,6 +1,9 @@
 using System;
 using UnityEngine;
 using MLAgents;
+using System.Net;
+using System.Net.Sockets;
+using System.Text;
 
 public class RobotArmAgent2 : Agent
 {
@@ -11,6 +14,8 @@ public class RobotArmAgent2 : Agent
     public GameObject wrist;
     public GameObject target;
     public GameObject end;
+    public GameObject angle;
+    public Transform cube;
     public Collider endOfWrist;
 
     private RobotArmAcademy2 raAacademy;
@@ -25,58 +30,66 @@ public class RobotArmAgent2 : Agent
     Vector3 wristpos;
     float distToTarget;
     float targetX, targetY;
+    
+    public float angleBD, angleBS, angleSE, angleEW;
+    
+    //Socket sock;
+    TcpListener server;
+    TcpClient client;
+    NetworkStream stream;
+    Byte[] bytes = new Byte[20];
+    string xy;
 
     public override void InitializeAgent()
     {
         wristpos = endOfWrist.transform.position;
-        MakeRandomTarget();
         fbRigid = body.GetComponent<Rigidbody>();
         bsRigid = shoulder.GetComponent<Rigidbody>();
         seRigid = elbow.GetComponent<Rigidbody>();
         ewRigid = wrist.GetComponent<Rigidbody>();
         weRigid = wrist.GetComponent<Rigidbody>();
         raAacademy = GameObject.Find("Academy").GetComponent<RobotArmAcademy2>();
+        
+        server = new TcpListener(IPAddress.Parse("192.168.0.12"), 8080);
+        server.Start();
+        client = server.AcceptTcpClient();
+        
+        stream = client.GetStream();
+        MakeRandomTarget();
+    }
+    
+    public void SendToRos(string msg)
+    {
+        byte[] sendMsg = Encoding.UTF8.GetBytes(msg);
+        stream.Write(sendMsg, 0, sendMsg.Length);
+        Debug.Log(msg);
     }
 
     public override void CollectObservations()
     {
         AddVectorObs(target.transform.localPosition.x);
         AddVectorObs(target.transform.localPosition.y);
-        AddVectorObs(Vector3.Distance(target.transform.position, endOfWrist.transform.position));
 
-        AddVectorObs(body.transform.rotation);
-	    AddVectorObs(fbRigid.angularVelocity);
-	    AddVectorObs(fbRigid.velocity);
+        AddVectorObs(body.transform.rotation.y);
+	AddVectorObs(shoulder.transform.rotation.x);
+	AddVectorObs(elbow.transform.rotation.x);
+	AddVectorObs(wrist.transform.rotation.x);
 	
-	    AddVectorObs(shoulder.transform.localPosition);
-	    AddVectorObs(shoulder.transform.rotation);
-	    AddVectorObs(bsRigid.angularVelocity);
-	    AddVectorObs(bsRigid.velocity);
-	
-	    AddVectorObs(elbow.transform.localPosition);
-	    AddVectorObs(elbow.transform.rotation);
-	    AddVectorObs(seRigid.angularVelocity);
-	    AddVectorObs(seRigid.velocity);
-	
-	    AddVectorObs(wrist.transform.localPosition);
-	    AddVectorObs(wrist.transform.rotation);
-	    AddVectorObs(ewRigid.angularVelocity);
-	    AddVectorObs(ewRigid.velocity);
-	
-
-        AddVectorObs(endOfWrist.transform.position.x);
-        AddVectorObs(endOfWrist.transform.position.y);
+	AddVectorObs(angleBD);
+	AddVectorObs(angleBS);
+	AddVectorObs(angleSE);
+	AddVectorObs(angleEW);
     }
 
     public override void AgentAction(float[] vectorAction, string textAction)
     {
-    	var torqueX = Mathf.Clamp(vectorAction[0], -1f, 1f) * 20f;
+    	var torqueX = Mathf.Clamp(vectorAction[0], -1f, 1f) * 100f;
     	fbRigid.AddTorque(new Vector3(0f, torqueX, 0f));
-    	torqueX = Mathf.Clamp(vectorAction[1], -1f, 1f) * 20f;
+    	torqueX = Mathf.Clamp(vectorAction[1], -1f, 1f) * 100f;
     	bsRigid.AddTorque(new Vector3(torqueX, 0f, 0f));
-    	torqueX = Mathf.Clamp(vectorAction[2], -1f, 1f) * 20f;
+    	torqueX = Mathf.Clamp(vectorAction[2], -1f, 1f) * 100f;
     	seRigid.AddTorque(new Vector3(torqueX, 0f, 0f));
-    	torqueX = Mathf.Clamp(vectorAction[3], -1f, 1f) * 20f;
+    	torqueX = Mathf.Clamp(vectorAction[3], -1f, 1f) * 100f;
     	ewRigid.AddTorque(new Vector3(torqueX, 0f, 0f));
         
         distToTarget = Vector3.Distance(target.transform.position, endOfWrist.transform.position);
@@ -95,24 +108,37 @@ public class RobotArmAgent2 : Agent
             AddReward(-1.0f);
             Done();
         }
+        angleBD = angle.transform.rotation.y - cube.rotation.y;
+        angleBS = shoulder.transform.rotation.x;
+        angleSE = Quaternion.Angle(bsRigid.rotation, seRigid.rotation);
+        angleEW = Quaternion.Angle(seRigid.rotation, ewRigid.rotation);
     }
 
     public void MakeRandomTarget()
     {
-        targetX = UnityEngine.Random.Range(-6.0f, 5.9f);
-        targetY = UnityEngine.Random.Range(4.5f, 9.0f);
+        
+        int i;
+        if ((i = stream.Read(bytes, 0, bytes.Length))!=0)
+        {
+            xy = System.Text.Encoding.UTF8.GetString(bytes, 0, i);
+        }
+        
+        Debug.Log(xy);
+        
+        targetX = float.Parse(xy.Split('/')[0]);
+        targetY = float.Parse(xy.Split('/')[1]);
+        targetX = 3.55f-(targetX*7.1f/1280f);
+        targetY = 9f-(targetY*4f/720f);
+        //targetX = UnityEngine.Random.Range(-6.0f, 5.9f);
+        //targetY = UnityEngine.Random.Range(4.5f, 9.0f);
         targetVec.Set(targetX, targetY, -5.7f);
 
         target.transform.position = targetVec;
+        
     }
 
     public override void AgentReset()
     {
-        //body.transform.rotation = Quaternion.Euler(180f, 0f, 0f);
-        //shoulder.transform.rotation = Quaternion.Euler(180f, 0f, 0f);
-        //elbow.transform.rotation = Quaternion.Euler(180f, 0f, 0f);
-        //wrist.transform.rotation = Quaternion.Euler(180f, 0f, 0f);
-        
         wristpos = endOfWrist.transform.position;
 
         endOfWrist.transform.position += Vector3.up;
