@@ -1219,7 +1219,7 @@ GameObject:
   - component: {fileID: 725405852}
   - component: {fileID: 725405851}
   m_Layer: 0
-  m_Name: WristJoint
+  m_Name: End
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
