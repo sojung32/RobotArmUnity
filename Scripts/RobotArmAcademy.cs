@@ -1,7 +1,7 @@
 using UnityEngine;
 using MLAgents;
 
-public class RobotArmAcademy2 : Academy
+public class RobotArmAcademy : Academy
 {
     
     public override void InitializeAcademy()
